@@ -1,0 +1,22 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+numpy = "*"
+pandas = "*"
+scikit-learn = "*"
+wandb = "*"
+pytorch-lightning = "1.0.4"
+rouge-score = "*"
+sacrebleu = "*"
+fsspec = "*"
+filelock = "*"
+transformers = "*"
+fire = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.6"
