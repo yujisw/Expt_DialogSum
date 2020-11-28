@@ -10,13 +10,15 @@ python finetune.py \
     --val_check_interval 0.25 \
     --max_source_length 512 --max_target_length 128 \
     --freeze_embeds --label_smoothing 0.1 --adafactor --task summarization \
-    --train_batch_size 4 \
-    --eval_batch_size 4 \
+    --train_batch_size 2 \
+    --eval_batch_size 2 \
     --n_train -1 \
     --n_val -1 \
     --n_test -1 \
     --data_dir "/home/acc12119do/dialogsum/samsum_dataset" \
     --output_dir "output/${today}" \
-    --model_name_or_path "google/pegasus-xsum" \
     --gpus 1 --logger_name wandb \
+    --model_name_or_path facebook/bart-large-xsum \
+    --tokenizer_name facebook/bart-large \
+    --warmup_steps 500 \
     "$@"
