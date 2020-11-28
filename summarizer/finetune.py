@@ -388,7 +388,7 @@ def main(args, model=None) -> SummarizationModule:
     elif args.logger_name == "wandb":
         from pytorch_lightning.loggers import WandbLogger
 
-        project = os.environ.get("WANDB_PROJECT", dataset)
+        project = os.environ.get("WANDB_PROJECT", "samsum_dataset")
         logger = WandbLogger(name=model.output_dir.name, project=project)
         logger.watch(model, log='gradients', log_freq=100)
         logger.log_metrics(model.metrics, step=None)
