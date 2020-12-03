@@ -162,7 +162,7 @@ def dialogue_preprocess(text_list):
 
     return pp4_text_list
 
-def preprocess(corpus_dir, output_dir, dialogue=False):
+def preprocess(corpus_dir, output_dir, dialogue=False, del_eot=False):
     print("loading corpus...")
     train_source_list, train_target_list = load_corpus(corpus_dir, data_name='train')
     val_source_list, val_target_list = load_corpus(corpus_dir, data_name='val')
@@ -187,10 +187,18 @@ def preprocess(corpus_dir, output_dir, dialogue=False):
     for i, text_list in enumerate(pp_data_list):
         check_no_newline(text_list)
     
+    if del_eot:
+        print("deleting [EOT]...")
+        pp2_data_list = []
+        for i, text_list in enumerate(pp_data_list):
+            pp2_data_list.append([text.replace(" [EOT]","") for text in text_list])
+    else:
+        pp2_data_list = pp_data_list
+
     print("saving...")
     os.makedirs(output_dir, exist_ok=True)
     data_names = ['train', 'val', 'test']
-    for i, text_list in enumerate(pp_data_list):
+    for i, text_list in enumerate(pp2_data_list):
         data_name = data_names[int(i/2)]
         mode = 'source' if i%2==0 else 'target'
         save_data(text_list, output_dir, data_name, mode)
@@ -199,6 +207,6 @@ def preprocess(corpus_dir, output_dir, dialogue=False):
 
 if __name__ == '__main__':
     corpus_dir = "/home/naraki/dialogsum/corpus"
-    output_dir = "/home/naraki/dialogsum/samsum_dataset2"
+    output_dir = "/home/naraki/dialogsum/samsum_dataset3"
 
-    preprocess(corpus_dir, output_dir, dialogue=True)
+    preprocess(corpus_dir, output_dir, dialogue=True, del_eot=True)
