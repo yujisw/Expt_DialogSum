@@ -377,6 +377,12 @@ def main(args, model=None) -> SummarizationModule:
             model: SummarizationModule = SummarizationModule(args)
         else:
             model: SummarizationModule = TranslationModule(args)
+    
+    if args.expand_vocab:
+        special_tokens_dict = {'additional_special_tokens': ['[SAYS]','[EOU]','[EOT]']}
+        num_added_toks = model.tokenizer.add_special_tokens(special_tokens_dict)
+        model.model.resize_token_embeddings(len(model.tokenizer))
+
     dataset = Path(args.data_dir).name
     if (
         args.logger_name == "default"
@@ -434,6 +440,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser = pl.Trainer.add_argparse_args(parser)
     parser = SummarizationModule.add_model_specific_args(parser, os.getcwd())
+
+    # my own args
+    parser.add_argument("--expand_vocab", action="store_true")
+    parser.add_argument("--freeze_speaker_embeds", action="store_true")
 
     args = parser.parse_args()
 
