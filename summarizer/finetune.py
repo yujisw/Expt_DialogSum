@@ -378,20 +378,19 @@ def main(args, model=None) -> SummarizationModule:
         else:
             model: SummarizationModule = TranslationModule(args)
     
-    if args.use_speaker_embeds:
-        original_encoder = model.model.model.encoder
-        model.model.model.encoder = BartEncoderWithSpeakerEmbedding(model.config, model.model.model.shared)
-        param = model.model.model.encoder.state_dict()
-        for name, _ in original_encoder.named_parameters():
-            param[name] = original_encoder.state_dict()[name]
-        model.model.model.encoder.load_state_dict(param)
-        if torch.cuda.is_available():
-            model.model.model = model.model.model.to('cuda')
-
     if args.expand_vocab:
         special_tokens_dict = {'additional_special_tokens': ['[SAYS]','[EOU]','[EOT]']}
         num_added_toks = model.tokenizer.add_special_tokens(special_tokens_dict)
         model.model.resize_token_embeddings(len(model.tokenizer))
+
+    if args.use_speaker_embeds or args.use_turn_embeds:
+        from speaker_embed_encoder import BartEncoderWithSpeakerEmbedding
+        original_encoder = model.model.model.encoder
+        model.model.model.encoder = BartEncoderWithSpeakerEmbedding(model.config, model.model.model.shared, use_turn_embeds=args.use_turn_embeds).to('cuda')
+        param = model.model.model.encoder.state_dict()
+        for name, _ in original_encoder.named_parameters():
+            param[name] = original_encoder.state_dict()[name]
+        model.model.model.encoder.load_state_dict(param)
 
     dataset = Path(args.data_dir).name
     if (
@@ -454,7 +453,8 @@ if __name__ == "__main__":
     # my own args
     parser.add_argument("--expand_vocab", action="store_true")
     parser.add_argument("--use_speaker_embeds", action="store_true")
-    parser.add_argument("--freeze_speaker_embeds", action="store_true")
+    parser.add_argument("--use_turn_embeds", action="store_true")
+    # parser.add_argument("--freeze_speaker_embeds", action="store_true")
 
     args = parser.parse_args()
 

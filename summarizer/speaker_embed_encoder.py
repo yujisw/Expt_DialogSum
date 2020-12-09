@@ -1,13 +1,21 @@
 import math
+import random
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from transformers.configuration_bart import BartConfig
-from transformers.modeling_bart import EncoderLayer, SinusoidalPositionalEmbedding, LayerNorm
+from transformers.modeling_bart import (
+    EncoderLayer,
+    SinusoidalPositionalEmbedding,
+    LearnedPositionalEmbedding,
+    LayerNorm,
+    invert_mask,
+)
+from transformers.modeling_outputs import BaseModelOutput
 
-class SpeakerConverter():
-    def __init__(self, speaker_num, eot_idx):
-        self.speaker_num = speaker_num
-        self.eot_idx=eot_idx
+class TurnConverter():
+    def __init__(self, eot_id):
+        self.eot_id=eot_id
         self.current_speaker_id=1
     
     def init_speaker_id(self):
@@ -22,7 +30,7 @@ class SpeakerConverter():
     def convert_id_to_speaker_id(self, w_id):
         if w_id==0:
             return 0
-        elif w_id==self.eot_idx:
+        elif w_id==self.eot_id:
             self.change_speaker_id()
         return self.current_speaker_id
 
@@ -30,11 +38,66 @@ class SpeakerConverter():
         batch_speaker_ids = []
         for text_ids in input_ids:
             speaker_ids = []
-            sc.init_speaker_id()
+            self.init_speaker_id()
             for w_id in text_ids:
-                speaker_ids.append(sc.convert_id_to_speaker_id(w_id.item()))
+                speaker_ids.append(self.convert_id_to_speaker_id(w_id))
             batch_speaker_ids.append(speaker_ids)
-        return torch.tensor(batch_speaker_ids)
+        return torch.tensor(batch_speaker_ids).to('cuda')
+
+class SpeakerConverter():
+    def __init__(self, says_id, eot_id, eod_id=1, pad_id=0):
+        self.says_id=says_id
+        self.eot_id=eot_id
+        self.eod_id=eod_id
+        self.pad_id=pad_id
+        self.current_speaker_id=1
+        self.speaker_list = []
+    
+    def init_attr(self):
+        self.current_speaker_id=1
+        self.speaker_list = []
+
+    def get_speaker_id(self, speaker_name):
+        if speaker_name in self.speaker_list:
+            return self.speaker_list.index(speaker_name)+1
+        else:
+            self.speaker_list.append(speaker_name)
+            return len(self.speaker_list)
+        
+    def change_speaker_id(self, speaker_ids):
+        if [self.eod_id] == speaker_ids:
+            self.current_speaker_id = 0
+        else:
+            self.current_speaker_id = self.get_speaker_id('_'.join([str(w_id) for w_id in speaker_ids]))
+        return self.current_speaker_id
+    
+    def convert_batch(self, input_ids):
+        batch_speaker_ids = []
+        for text_idx, text_seq in enumerate(input_ids):
+            speaker_ids = []
+            self.init_attr()
+            text_len = len(text_seq)
+            for w_idx in range(text_len):
+                if w_idx==0:
+                    for i in range(w_idx, text_len):
+                        if self.says_id == text_seq[i]:
+                            speaker_ids.append(self.current_speaker_id)
+                            self.change_speaker_id(text_seq[w_idx:i])
+                            break
+                elif self.eot_id == text_seq[w_idx]:
+                    for i in range(w_idx+1, text_len):
+                        if self.eod_id == text_seq[i]:
+                            speaker_ids.append(self.current_speaker_id)
+                            self.change_speaker_id([self.eod_id])
+                            break
+                        elif self.says_id == text_seq[i]:
+                            speaker_ids.append(self.current_speaker_id)
+                            self.change_speaker_id(text_seq[w_idx+1:i])
+                            break
+                else:
+                    speaker_ids.append(self.current_speaker_id)
+            batch_speaker_ids.append(speaker_ids)
+        return torch.tensor(batch_speaker_ids).to('cuda')
 
 class BartEncoderWithSpeakerEmbedding(nn.Module):
     """
@@ -44,7 +107,7 @@ class BartEncoderWithSpeakerEmbedding(nn.Module):
         config: BartConfig
     """
 
-    def __init__(self, config: BartConfig, embed_tokens):
+    def __init__(self, config: BartConfig, embed_tokens, speaker_embed_scale=0, use_turn_embeds=False):
         super().__init__()
 
         self.dropout = config.dropout
@@ -58,11 +121,19 @@ class BartEncoderWithSpeakerEmbedding(nn.Module):
         self.embed_tokens = embed_tokens
 
         # speaker embedding setup
-        self.eot_idx = embed_tokens.num_embeddings - 1
-        speaker_num = 2 #TODO
-        self.speaker_converter = SpeakerConverter(speaker_num = speaker_num, eot_idx = self.eot_idx)
-        self.speaker_embed_scale = 0.1
-        self.embed_speaker = nn.Embedding(speaker_num+1, embed_dim, padding_idx=0)
+        self.says_id = embed_tokens.num_embeddings - 3
+        self.eot_id = embed_tokens.num_embeddings - 1
+
+        if use_turn_embeds:
+            max_speaker_num = 2
+            self.speaker_converter = TurnConverter(eot_id = self.eot_id)
+        else:
+            max_speaker_num = 14
+            self.speaker_converter = SpeakerConverter(says_id = self.says_id, eot_id = self.eot_id, eod_id=1, pad_id=0)
+        # self.speaker_embed_scale = 1
+        # self.speaker_embed_scale = math.sqrt(max_speaker_num) if speaker_embed_scale>0 else speaker_embed_scale
+        self.speaker_embed_scale = self.embed_scale * 0.1 if speaker_embed_scale>0 else speaker_embed_scale
+        self.embed_speaker = nn.Embedding(max_speaker_num+1, embed_dim, padding_idx=0)
         
         if config.static_position_embeddings:
             self.embed_positions = SinusoidalPositionalEmbedding(
