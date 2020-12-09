@@ -4,7 +4,7 @@ today=`date "+%Y-%m-%d-%H-%M-%S"`
 
 # Set --gradient_accumulation_steps  so that effective batch size is 256 (2*128, 4*64, 8*32, 16*16)
 python finetune.py \
-    --learning_rate=1e-5 \
+    --learning_rate=3e-5 \
     --do_train \
     --do_predict \
     --val_check_interval 0.25 \
@@ -20,6 +20,7 @@ python finetune.py \
     --model_name_or_path "google/pegasus-xsum" \
     --gpus 1 --logger_name wandb \
     --expand_vocab \
+    --use_speaker_embeds \
     "$@"
 
 #    --freeze_embeds \
