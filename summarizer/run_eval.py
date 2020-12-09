@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import os
 import argparse
 import datetime
 import json
@@ -54,6 +55,7 @@ def generate_summaries_or_translations(
         summaries = model.generate(
             input_ids=batch.input_ids,
             attention_mask=batch.attention_mask,
+            num_beams=5,
             **generate_kwargs,
         )
         dec = tokenizer.batch_decode(summaries, skip_special_tokens=True, clean_up_tokenization_spaces=False)
@@ -87,11 +89,13 @@ def run_generate(verbose=True):
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("model_name", type=str, help="like facebook/bart-large-cnn,t5-base, etc.")
-    parser.add_argument("input_path", type=str, help="like cnn_dm/test.source")
-    parser.add_argument("save_path", type=str, help="where to save summaries")
-    parser.add_argument("--reference_path", type=str, required=False, help="like cnn_dm/test.target")
-    parser.add_argument("--score_path", type=str, required=False, default="metrics.json", help="where to save metrics")
+    parser.add_argument("model_dir", type=str, help="like facebook/bart-large-cnn,t5-base, etc.")
+    parser.add_argument("dataset_dir", type=str, help="like cnn_dm/test.source")
+    # parser.add_argument("model_name", type=str, help="like facebook/bart-large-cnn,t5-base, etc.")
+    # parser.add_argument("input_path", type=str, help="like cnn_dm/test.source")
+    # parser.add_argument("save_path", type=str, help="where to save summaries")
+    # parser.add_argument("--reference_path", type=str, required=False, help="like cnn_dm/test.target")
+    # parser.add_argument("--score_path", type=str, required=False, default="metrics.json", help="where to save metrics")
     parser.add_argument("--device", type=str, required=False, default=DEFAULT_DEVICE, help="cuda, cuda:1, cpu etc.")
     parser.add_argument(
         "--prefix", type=str, required=False, default=None, help="will be added to the begininng of src examples"
@@ -115,6 +119,13 @@ def run_generate(verbose=True):
     parsed_args = parse_numeric_n_bool_cl_kwargs(rest)
     if parsed_args and verbose:
         print(f"parsed the following generate kwargs: {parsed_args}")
+
+    args.model_name = os.path.join(args.model_dir, "best_tfmr")
+    args.input_path = os.path.join(args.dataset_dir, "test.source")
+    args.save_path = os.path.join(args.model_dir, "gen_summary.txt")
+    args.reference_path = os.path.join(args.dataset_dir, "test.target")
+    args.score_path = os.path.join(args.model_dir, "score.json")
+    
     examples = [" " + x.rstrip() if "t5" in args.model_name else x.rstrip() for x in open(args.input_path).readlines()]
     if args.n_obs > 0:
         examples = examples[: args.n_obs]
@@ -160,4 +171,6 @@ def run_generate(verbose=True):
 if __name__ == "__main__":
     # Usage for MT:
     # python run_eval.py MODEL_NAME(./output/2020-MM-DD-HH-MM-SS/best_tfmr) $DATA_DIR/test.source $save_dir/test_translations.txt --reference_path $DATA_DIR/test.target --score_path $save_dir/test_bleu.json  --task translation $@
+    # Usage for Summarization
+    # python run_eval.py output/2020-12-07-14-20-34 ../../samsum_dataset2
     run_generate(verbose=True)
