@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 
 from callbacks import Seq2SeqLoggingCallback, get_checkpoint_callback, get_early_stopping_callback
 from transformers import MBartTokenizer, T5ForConditionalGeneration
-from transformers.modeling_bart import shift_tokens_right
+from transformers.models.bart.modeling_bart import shift_tokens_right
 from utils import (
     ROUGE_KEYS,
     LegacySeq2SeqDataset,
@@ -455,6 +455,13 @@ if __name__ == "__main__":
     parser.add_argument("--use_speaker_embeds", action="store_true")
     parser.add_argument("--use_turn_embeds", action="store_true")
     # parser.add_argument("--freeze_speaker_embeds", action="store_true")
+
+    parser.add_argument("--max_length", default=128, type=int,
+            help="The maximum target sequence length to be generated.",
+        )
+    parser.add_argument("--min_length", default=10, type=int,
+            help="The minimum target sequence length to be generated.",
+        )
 
     args = parser.parse_args()
 
