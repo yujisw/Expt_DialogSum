@@ -38,6 +38,22 @@ def generate_summaries_or_translations(
     fout = Path(out_file).open("w", encoding="utf-8")
     model_name = str(model_name)
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(device)
+
+    state_dict = torch.load(os.path.join(model_name,"pytorch_model.bin"), map_location="cpu")
+
+    if 'model.encoder.embed_speaker.weight' in state_dict.keys():
+        from speaker_embed_encoder import BartEncoderWithSpeakerEmbedding
+        speaker_encoder = BartEncoderWithSpeakerEmbedding(model.config, model.model.shared, use_turn_embeds=False) # Be carefull about use_turn_embeds when using turn embeds
+
+        for name, param in model.model.encoder.named_parameters():
+            speaker_encoder.state_dict()[name][:] = param
+
+        speaker_encoder.embed_speaker.weight = torch.nn.Parameter(state_dict['model.encoder.embed_speaker.weight'])
+        model.model.encoder = speaker_encoder
+        model = model.to(device)
+
+    del state_dict
+
     if fp16:
         model = model.half()
 
