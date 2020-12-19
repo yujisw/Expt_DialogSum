@@ -43,7 +43,7 @@ def generate_summaries_or_translations(
 
     if 'model.encoder.embed_speaker.weight' in state_dict.keys():
         print("using speaker_embeds")
-        from speaker_embed_encoder import BartEncoderWithSpeakerEmbedding        
+        from speaker_embed_encoder import BartEncoderWithSpeakerEmbedding
         # Be carefull about use_turn_embeds when using turn embeds
         model.model.encoder = BartEncoderWithSpeakerEmbedding(model.config, model.model.shared, use_turn_embeds=False).to(device)
         params = model.model.encoder.state_dict()
