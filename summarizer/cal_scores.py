@@ -13,7 +13,7 @@ import torch
 from tqdm import tqdm
 
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
-from utils import calculate_bleu, calculate_rouge, chunks, parse_numeric_n_bool_cl_kwargs, use_task_specific_params
+from utils import cal_exact_rouge, calculate_rouge, chunks, parse_numeric_n_bool_cl_kwargs, use_task_specific_params
 
 def run_generate(verbose=True):
 
@@ -24,7 +24,7 @@ def run_generate(verbose=True):
     parser.add_argument(
         "--prefix", type=str, required=False, default=None, help="will be added to the begininng of src examples"
     )
-    parser.add_argument("--task", type=str, default="summarization", help="used for task_specific_params + metrics")
+    parser.add_argument("--exact", action="store_true")
 
     # Unspecified args like --num_beams=2 --decoder_start_token_id=4 are passed to model.generate
     args, rest = parser.parse_known_args()
@@ -33,7 +33,7 @@ def run_generate(verbose=True):
         print(f"parsed the following generate kwargs: {parsed_args}")
 
     # Compute scores
-    score_fn = calculate_bleu if "translation" in args.task else calculate_rouge
+    score_fn = cal_exact_rouge if args.exact else calculate_rouge
     output_lns = [x.rstrip() for x in open(args.gen_summary_path).readlines()]
     reference_lns = [x.rstrip() for x in open(args.reference_path).readlines()][: len(output_lns)]
     scores: dict = score_fn(output_lns, reference_lns)
