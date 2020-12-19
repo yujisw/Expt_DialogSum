@@ -386,7 +386,13 @@ def main(args, model=None) -> SummarizationModule:
     if args.use_speaker_embeds or args.use_turn_embeds:
         from speaker_embed_encoder import BartEncoderWithSpeakerEmbedding
         original_encoder = model.model.model.encoder
-        model.model.model.encoder = BartEncoderWithSpeakerEmbedding(model.config, model.model.model.shared, use_turn_embeds=args.use_turn_embeds).to('cuda')
+        model.model.model.encoder = BartEncoderWithSpeakerEmbedding(
+            model.config,
+            model.model.model.shared,
+            ratio_to_token_embedding=args.ratio_to_token_embedding,
+            speaker_embed_scale=args.speaker_embed_scale,
+            use_turn_embeds=args.use_turn_embeds
+            ).to('cuda')
         param = model.model.model.encoder.state_dict()
         for name, _ in original_encoder.named_parameters():
             param[name] = original_encoder.state_dict()[name]
@@ -461,6 +467,12 @@ if __name__ == "__main__":
         )
     parser.add_argument("--min_length", default=10, type=int,
             help="The minimum target sequence length to be generated.",
+        )
+    parser.add_argument("--ratio_to_token_embedding", default=0, type=float,
+            help="speaker embed scale ratio to token embed scale.",
+        )
+    parser.add_argument("--speaker_embed_scale", default=0, type=float,
+            help="speaker embed scale.",
         )
 
     args = parser.parse_args()

@@ -107,7 +107,7 @@ class BartEncoderWithSpeakerEmbedding(nn.Module):
         config: BartConfig
     """
 
-    def __init__(self, config: BartConfig, embed_tokens, speaker_embed_scale=0, use_turn_embeds=False):
+    def __init__(self, config: BartConfig, embed_tokens, ratio_to_token_embedding=0, speaker_embed_scale=0, use_turn_embeds=False):
         super().__init__()
 
         self.dropout = config.dropout
@@ -130,9 +130,17 @@ class BartEncoderWithSpeakerEmbedding(nn.Module):
         else:
             max_speaker_num = 14
             self.speaker_converter = SpeakerConverter(says_id = self.says_id, eot_id = self.eot_id, eod_id=1, pad_id=0)
-        # self.speaker_embed_scale = 1
-        # self.speaker_embed_scale = math.sqrt(max_speaker_num) if speaker_embed_scale>0 else speaker_embed_scale
-        self.speaker_embed_scale = self.embed_scale * 0.1 if speaker_embed_scale>0 else speaker_embed_scale
+
+        # setting for speaker_embed_scale
+        assert ratio_to_token_embedding!=0 or speaker_embed_scale!=0, "Please set ratio_to_token_embedding or speaker_embed_scale with a positive value."
+        assert ratio_to_token_embedding==0 or speaker_embed_scale==0, "Do not set both ratio_to_token_embedding and speaker_embed_scale."
+        if ratio_to_token_embedding!=0:
+            self.speaker_embed_scale = self.embed_scale * ratio_to_token_embedding
+        elif speaker_embed_scale!=0:
+            self.speaker_embed_scale = speaker_embed_scale
+        else:
+            assert False, "Could not set speaker_embed_scale."
+
         self.embed_speaker = nn.Embedding(max_speaker_num+1, embed_dim, padding_idx=0)
         
         if config.static_position_embeddings:
