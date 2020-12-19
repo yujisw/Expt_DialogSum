@@ -14,7 +14,7 @@ import torch
 from tqdm import tqdm
 
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
-from utils import calculate_bleu, calculate_rouge, chunks, parse_numeric_n_bool_cl_kwargs, use_task_specific_params
+from utils import cal_exact_rouge, calculate_rouge, chunks, parse_numeric_n_bool_cl_kwargs, use_task_specific_params
 
 
 logger = getLogger(__name__)
@@ -42,17 +42,17 @@ def generate_summaries_or_translations(
     state_dict = torch.load(os.path.join(model_name,"pytorch_model.bin"), map_location="cpu")
 
     if 'model.encoder.embed_speaker.weight' in state_dict.keys():
-        from speaker_embed_encoder import BartEncoderWithSpeakerEmbedding
-        speaker_encoder = BartEncoderWithSpeakerEmbedding(model.config, model.model.shared, use_turn_embeds=False) # Be carefull about use_turn_embeds when using turn embeds
-
-        for name, param in model.model.encoder.named_parameters():
-            speaker_encoder.state_dict()[name][:] = param
-
-        speaker_encoder.embed_speaker.weight = torch.nn.Parameter(state_dict['model.encoder.embed_speaker.weight'])
-        model.model.encoder = speaker_encoder
-        model = model.to(device)
-
-    del state_dict
+        print("using speaker_embeds")
+        from speaker_embed_encoder import BartEncoderWithSpeakerEmbedding        
+        # Be carefull about use_turn_embeds when using turn embeds
+        model.model.encoder = BartEncoderWithSpeakerEmbedding(model.config, model.model.shared, use_turn_embeds=False).to(device)
+        params = model.model.encoder.state_dict()
+        for name in params.keys():
+            if name =="embed_positions.weight":
+                params[name] = model.model.encoder.state_dict()[name]
+            else:
+                params[name] = state_dict['model.encoder.'+name]
+        model.model.encoder.load_state_dict(params)
 
     if fp16:
         model = model.half()
@@ -112,6 +112,8 @@ def run_generate(verbose=True):
     # parser.add_argument("save_path", type=str, help="where to save summaries")
     # parser.add_argument("--reference_path", type=str, required=False, help="like cnn_dm/test.target")
     # parser.add_argument("--score_path", type=str, required=False, default="metrics.json", help="where to save metrics")
+    parser.add_argument("--exact", action="store_true")
+    parser.add_argument("--val", action="store_true")
     parser.add_argument("--device", type=str, required=False, default=DEFAULT_DEVICE, help="cuda, cuda:1, cpu etc.")
     parser.add_argument(
         "--prefix", type=str, required=False, default=None, help="will be added to the begininng of src examples"
@@ -137,10 +139,21 @@ def run_generate(verbose=True):
         print(f"parsed the following generate kwargs: {parsed_args}")
 
     args.model_name = os.path.join(args.model_dir, "best_tfmr")
-    args.input_path = os.path.join(args.dataset_dir, "test.source")
-    args.save_path = os.path.join(args.model_dir, "gen_summary.txt")
-    args.reference_path = os.path.join(args.dataset_dir, "test.target")
-    args.score_path = os.path.join(args.model_dir, "score.json")
+    # args.input_path = os.path.join(args.dataset_dir, "test.source")
+    # args.save_path = os.path.join(args.model_dir, "gen_summary.txt")
+    # args.reference_path = os.path.join(args.dataset_dir, "test.target")
+    # args.score_path = os.path.join(args.model_dir, "score.json")
+    if args.val:
+        args.input_path = os.path.join(args.dataset_dir, "val.source")
+        args.reference_path = os.path.join(args.dataset_dir, "val.target")
+        args.save_path = os.path.join(args.model_dir, "val_gen_summary.txt")
+        args.score_path = os.path.join(args.model_dir, "val_score.json")
+    else:
+        args.input_path = os.path.join(args.dataset_dir, "test.source")
+        args.reference_path = os.path.join(args.dataset_dir, "test.target")
+        args.save_path = os.path.join(args.model_dir, "test_gen_summary.txt")
+        args.score_path = os.path.join(args.model_dir, "test_score.json")
+
     
     examples = [" " + x.rstrip() if "t5" in args.model_name else x.rstrip() for x in open(args.input_path).readlines()]
     if args.n_obs > 0:
@@ -164,7 +177,7 @@ def run_generate(verbose=True):
         return {}
 
     # Compute scores
-    score_fn = calculate_bleu if "translation" in args.task else calculate_rouge
+    score_fn = cal_exact_rouge if args.exact else calculate_rouge
     output_lns = [x.rstrip() for x in open(args.save_path).readlines()]
     reference_lns = [x.rstrip() for x in open(args.reference_path).readlines()][: len(output_lns)]
     scores: dict = score_fn(output_lns, reference_lns)
