@@ -21,6 +21,8 @@ python finetune.py \
     --gpus 1 --logger_name wandb \
     --expand_vocab \
     --use_speaker_embeds \
+    --partial_embed \
+    --speaker_embed_scale 1 \
     --val_max_target_length 100 --test_max_target_length 100 \
     --max_length 100 --min_length 10 \
     "$@"
