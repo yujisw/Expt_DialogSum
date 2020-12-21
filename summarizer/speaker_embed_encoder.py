@@ -107,14 +107,14 @@ class BartEncoderWithSpeakerEmbedding(nn.Module):
         config: BartConfig
     """
 
-    def __init__(self, config: BartConfig, embed_tokens, ratio_to_token_embedding=0, speaker_embed_scale=0, use_turn_embeds=False):
+    def __init__(self, config: BartConfig, embed_tokens, ratio_to_token_embedding=0, speaker_embed_scale=0, use_turn_embeds=False, partial_embed=False):
         super().__init__()
 
         self.dropout = config.dropout
         self.layerdrop = config.encoder_layerdrop
 
-        embed_dim = embed_tokens.embedding_dim
-        self.embed_scale = math.sqrt(embed_dim) if config.scale_embedding else 1.0
+        self.embed_dim = embed_tokens.embedding_dim
+        self.embed_scale = math.sqrt(self.embed_dim) if config.scale_embedding else 1.0
         self.padding_idx = embed_tokens.padding_idx
         self.max_source_positions = config.max_position_embeddings
 
@@ -141,21 +141,24 @@ class BartEncoderWithSpeakerEmbedding(nn.Module):
         else:
             assert False, "Could not set speaker_embed_scale."
 
-        self.embed_speaker = nn.Embedding(max_speaker_num+1, embed_dim, padding_idx=0)
+        if partial_embed:
+            self.embed_speaker = nn.Embedding(max_speaker_num+1, self.embed_dim/4, padding_idx=0)
+        else:
+            self.embed_speaker = nn.Embedding(max_speaker_num+1, self.embed_dim, padding_idx=0)
         
         if config.static_position_embeddings:
             self.embed_positions = SinusoidalPositionalEmbedding(
-                config.max_position_embeddings, embed_dim, self.padding_idx
+                config.max_position_embeddings, self.embed_dim, self.padding_idx
             )
         else:
             self.embed_positions = LearnedPositionalEmbedding(
                 config.max_position_embeddings,
-                embed_dim,
+                self.embed_dim,
                 self.padding_idx,
                 config.extra_pos_embeddings,
             )
         self.layers = nn.ModuleList([EncoderLayer(config) for _ in range(config.encoder_layers)])
-        self.layernorm_embedding = LayerNorm(embed_dim) if config.normalize_embedding else nn.Identity()
+        self.layernorm_embedding = LayerNorm(self.embed_dim) if config.normalize_embedding else nn.Identity()
         # mbart has one extra layer_norm
         self.layer_norm = LayerNorm(config.d_model) if config.add_final_layer_norm else None
 
@@ -186,7 +189,12 @@ class BartEncoderWithSpeakerEmbedding(nn.Module):
         embed_spk = self.embed_speaker(batch_speaker_ids) * self.speaker_embed_scale
         
         # x = inputs_embeds + embed_pos
-        x = inputs_embeds + embed_pos + embed_spk
+        x = inputs_embeds + embed_pos
+        if partial_embed:
+            x[:,:,self.embed_dim*3/8:self.embed_dim/2] = embed_spk[:,:,:self.embed_dim/8]
+            x[:,:,self.embed_dim*7/8:] = embed_spk[:,:,self.embed_dim/8:]
+        else:
+            x = x + embed_spk
         x = self.layernorm_embedding(x)
         x = F.dropout(x, p=self.dropout, training=self.training)
 

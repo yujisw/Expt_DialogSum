@@ -391,7 +391,8 @@ def main(args, model=None) -> SummarizationModule:
             model.model.model.shared,
             ratio_to_token_embedding=args.ratio_to_token_embedding,
             speaker_embed_scale=args.speaker_embed_scale,
-            use_turn_embeds=args.use_turn_embeds
+            use_turn_embeds=args.use_turn_embeds,
+            partial_embed=args.partial_embed,
             ).to('cuda')
         param = model.model.model.encoder.state_dict()
         for name, _ in original_encoder.named_parameters():
@@ -474,6 +475,7 @@ if __name__ == "__main__":
     parser.add_argument("--speaker_embed_scale", default=0, type=float,
             help="speaker embed scale.",
         )
+    parser.add_argument("--partial_embed", action="store_true")
 
     args = parser.parse_args()
 
