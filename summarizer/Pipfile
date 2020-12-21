@@ -17,6 +17,7 @@ transformers = "*"
 fire = "*"
 jupyter = "*"
 jupyterlab = "*"
+matplotlib = "*"
 
 [dev-packages]
 
