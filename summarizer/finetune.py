@@ -476,6 +476,7 @@ if __name__ == "__main__":
             help="speaker embed scale.",
         )
     parser.add_argument("--partial_embed", action="store_true")
+    parser.add_argument("--new_params_learning_rate", type=float, default=1e-4, help="Learning rate for new params.")
 
     args = parser.parse_args()
 

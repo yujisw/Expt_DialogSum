@@ -143,7 +143,7 @@ class BaseTransformer(pl.LightningModule):
             {
                 "params": [p for n, p in model.named_parameters() if any(np in n for np in new_params)],
                 "weight_decay": self.hparams.weight_decay,
-                "lr": 5e-5,
+                "lr": self.hparams.new_params_learning_rate,
             },
             {
                 "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay+new_params)],
@@ -162,6 +162,16 @@ class BaseTransformer(pl.LightningModule):
             optimizer = Adafactor(
                 optimizer_grouped_parameters, scale_parameter=False, relative_step=False
             )
+
+        else:
+            optimizer = AdamW(
+                optimizer_grouped_parameters, lr=self.hparams.learning_rate, eps=self.hparams.adam_epsilon
+            )
+        self.opt = optimizer
+
+        scheduler = self.get_lr_scheduler()
+
+        return [optimizer], [scheduler]
 
     def test_step(self, batch, batch_nb):
         return self.validation_step(batch, batch_nb)
