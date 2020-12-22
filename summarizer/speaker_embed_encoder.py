@@ -3,8 +3,8 @@ import random
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers.models.bart.configuration_bart import BartConfig
-from transformers.models.bart.modeling_bart import (
+from transformers.configuration_bart import BartConfig
+from transformers.modeling_bart import (
     EncoderLayer,
     SinusoidalPositionalEmbedding,
     LearnedPositionalEmbedding,
