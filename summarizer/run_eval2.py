@@ -16,7 +16,7 @@ from tqdm import tqdm
 
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 from utils import cal_exact_rouge, calculate_rouge, chunks, parse_numeric_n_bool_cl_kwargs, use_task_specific_params
-
+from finetune import SummarizationModule
 
 logger = getLogger(__name__)
 
@@ -38,59 +38,49 @@ def generate_summaries_or_translations(
     """Save model.generate results to <out_file>, and return how long it took."""
     fout = Path(out_file).open("w", encoding="utf-8")
     model_name = str(model_name)
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(device)
 
-    state_dict = torch.load(os.path.join(model_name,"pytorch_model.bin"), map_location="cpu")
+    # loading hparams...
+    with open(model_name.replace("best_tfmr","hparams.pkl"), 'rb') as f:
+        hparams = pickle.load(f)
+    
+    model: SummarizationModule = SummarizationModule(hparams)
 
-    if 'model.encoder.embed_speaker.weight' in state_dict.keys():
-        print("using speaker_embeds")
+    if hparams.expand_vocab:
+        special_tokens_dict = {'additional_special_tokens': ['[SAYS]','[EOU]','[EOT]']}
+        num_added_toks = model.tokenizer.add_special_tokens(special_tokens_dict)
+        model.model.resize_token_embeddings(len(model.tokenizer))
+
+    if hparams.use_speaker_embeds or hparams.use_turn_embeds:
         from speaker_embed_encoder import BartEncoderWithSpeakerEmbedding
-
-        # loading hparams...
-        with open(model_name.replace("best_tfmr","hparams.pkl"), 'rb') as f:
-            hparams = pickle.load(f)
-        
-        model.model.encoder = BartEncoderWithSpeakerEmbedding(
+        model.model.model.encoder = BartEncoderWithSpeakerEmbedding(
             model.config,
-            model.model.shared,
-            ratio_to_token_embedding=hparams["ratio_to_token_embedding"],
-            speaker_embed_scale=hparams["speaker_embed_scale"],
-            use_turn_embeds=hparams["use_turn_embeds"],
-            partial_embed=hparams["partial_embed"],
-            ).to(device)
-        
-        checkpoint = torch.load(model_name.replace("best_tfmr","val_avg_rouge2=29.0483-step_count=11.ckpt"))['state_dict']
-        from collections import OrderedDict
-        checkpoint2 = OrderedDict()
-        for k,v in checkpoint.items():
-            checkpoint2[k[6:]] = v
+            model.model.model.shared,
+            ratio_to_token_embedding=hparams.ratio_to_token_embedding,
+            speaker_embed_scale=hparams.speaker_embed_scale,
+            use_turn_embeds=hparams.use_turn_embeds,
+            partial_embed=hparams.partial_embed,
+            )
 
-        model.load_state_dict(checkpoint2)
-
-    if fp16:
-        model = model.half()
-
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    special_tokens_dict = {'additional_special_tokens': ['[SAYS]','[EOU]','[EOT]']}
-    tokenizer.add_special_tokens(special_tokens_dict)
-    logger.info(f"Inferred tokenizer type: {tokenizer.__class__}")  # if this is wrong, check config.model_type.
+    checkpoint = torch.load(model_name.replace("best_tfmr","val_avg_rouge2=29.0483-step_count=11.ckpt"))['state_dict']
+    model.load_state_dict(checkpoint)
+    model = model.to('cuda')
 
     start_time = time.time()
     # update config with task specific params
-    use_task_specific_params(model, task)
+    use_task_specific_params(model.model, task)
     if prefix is None:
-        prefix = prefix or getattr(model.config, "prefix", "") or ""
+        prefix = prefix or getattr(model.model.config, "prefix", "") or ""
     for examples_chunk in tqdm(list(chunks(examples, batch_size))):
         examples_chunk = [prefix + text for text in examples_chunk]
-        batch = tokenizer(examples_chunk, return_tensors="pt", truncation=True, padding="longest").to(device)
-        summaries = model.generate(
+        batch = model.tokenizer(examples_chunk, return_tensors="pt", truncation=True, padding="longest").to(device)
+        summaries = model.model.generate(
             input_ids=batch.input_ids,
             attention_mask=batch.attention_mask,
             num_beams=8,
             max_length=64,
             **generate_kwargs,
         )
-        dec = tokenizer.batch_decode(summaries, skip_special_tokens=True, clean_up_tokenization_spaces=True)
+        dec = model.tokenizer.batch_decode(summaries, skip_special_tokens=True, clean_up_tokenization_spaces=True)
         for hypothesis in dec:
             fout.write(hypothesis + "\n")
             fout.flush()

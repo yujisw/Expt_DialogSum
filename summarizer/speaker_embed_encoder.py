@@ -3,8 +3,8 @@ import random
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers.models.bart.configuration_bart import BartConfig
-from transformers.models.bart.modeling_bart import (
+from transformers.configuration_bart import BartConfig
+from transformers.modeling_bart import (
     EncoderLayer,
     SinusoidalPositionalEmbedding,
     LearnedPositionalEmbedding,
@@ -141,8 +141,13 @@ class BartEncoderWithSpeakerEmbedding(nn.Module):
         else:
             assert False, "Could not set speaker_embed_scale."
 
-        if partial_embed:
-            self.embed_speaker = nn.Embedding(max_speaker_num+1, self.embed_dim/4, padding_idx=0)
+        self.partial_embed = partial_embed
+        if self.partial_embed:
+            valid_idx = torch.LongTensor(list(range(self.embed_dim*3//8, self.embed_dim//2)) + list(range(self.embed_dim*7//8,self.embed_dim)))
+            self.mask = torch.eye(self.embed_dim)[valid_idx].sum(axis=0).to('cuda')
+            print("mask requires_grad:",self.mask.requires_grad)
+            print("mask[0]:",self.mask)
+            self.embed_speaker = nn.Embedding(max_speaker_num+1, self.embed_dim, padding_idx=0)
         else:
             self.embed_speaker = nn.Embedding(max_speaker_num+1, self.embed_dim, padding_idx=0)
         
@@ -190,11 +195,14 @@ class BartEncoderWithSpeakerEmbedding(nn.Module):
         
         # x = inputs_embeds + embed_pos
         x = inputs_embeds + embed_pos
-        if partial_embed:
-            x[:,:,self.embed_dim*3/8:self.embed_dim/2] = embed_spk[:,:,:self.embed_dim/8]
-            x[:,:,self.embed_dim*7/8:] = embed_spk[:,:,self.embed_dim/8:]
-        else:
-            x = x + embed_spk
+        if self.partial_embed:
+            embed_spk = embed_spk * self.mask
+            # x[:,:,self.embed_dim*3//8:self.embed_dim//2] = x[:,:,self.embed_dim*3//8:self.embed_dim//2] + embed_spk[:,:,:self.embed_dim//8]
+            # x[:,:,self.embed_dim*7//8:] = x[:,:,self.embed_dim*7//8:] + embed_spk[:,:,self.embed_dim//8:]
+        # else:
+        #     x = x + embed_spk
+        x = x + embed_spk
+
         x = self.layernorm_embedding(x)
         x = F.dropout(x, p=self.dropout, training=self.training)
 

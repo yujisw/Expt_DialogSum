@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 
 from callbacks import Seq2SeqLoggingCallback, get_checkpoint_callback, get_early_stopping_callback
 from transformers import MBartTokenizer, T5ForConditionalGeneration
-from transformers.models.bart.modeling_bart import shift_tokens_right
+from transformers.modeling_bart import shift_tokens_right
 from utils import (
     ROUGE_KEYS,
     LegacySeq2SeqDataset,
@@ -476,6 +476,7 @@ if __name__ == "__main__":
             help="speaker embed scale.",
         )
     parser.add_argument("--partial_embed", action="store_true")
+    parser.add_argument("--new_params_learning_rate", type=float, default=1e-4, help="Learning rate for new params.")
 
     args = parser.parse_args()
 
