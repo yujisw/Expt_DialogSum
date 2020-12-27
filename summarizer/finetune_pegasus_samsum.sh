@@ -4,8 +4,8 @@ today=`date "+%Y-%m-%d-%H-%M-%S"`
 
 # Set --gradient_accumulation_steps  so that effective batch size is 256 (2*128, 4*64, 8*32, 16*16)
 python finetune.py \
-    --learning_rate=1e-5 \
-    --new_params_learning_rate=1e-4 \
+    --learning_rate=3e-5 \
+    --new_params_learning_rate=3e-5  \
     --do_train \
     --do_predict \
     --val_check_interval 0.25 \
@@ -23,7 +23,7 @@ python finetune.py \
     --expand_vocab \
     --use_speaker_embeds \
     --partial_embed \
-    --speaker_embed_scale 1 \
+    --speaker_embed_scale 10 \
     --val_max_target_length 100 --test_max_target_length 100 \
     --max_length 100 --min_length 10 \
     "$@"
