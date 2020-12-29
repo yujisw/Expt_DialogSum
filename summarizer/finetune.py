@@ -24,6 +24,7 @@ from utils import (
     Seq2SeqDataset,
     assert_all_frozen,
     calculate_bleu,
+    cal_exact_rouge,
     calculate_rouge,
     check_output_dir,
     flatten_list,
@@ -109,6 +110,12 @@ class SummarizationModule(BaseTransformer):
             self.eval_max_length = self.hparams.eval_max_gen_length
         else:
             self.eval_max_length = self.model.config.max_length
+
+        if self.hparams.eval_min_gen_length is not None:
+            self.eval_min_length = self.hparams.eval_min_gen_length
+        else:
+            self.eval_min_length = self.model.config.min_length
+
         self.val_metric = self.default_val_metric if self.hparams.val_metric is None else self.hparams.val_metric
 
     def save_readable_batch(self, batch: Dict[str, torch.Tensor]) -> Dict[str, List[str]]:
@@ -202,7 +209,7 @@ class SummarizationModule(BaseTransformer):
         }
 
     def calc_generative_metrics(self, preds, target) -> Dict:
-        return calculate_rouge(preds, target)
+        return cal_exact_rouge(preds, target)
 
     def _generative_step(self, batch: dict) -> dict:
         t0 = time.time()
@@ -215,6 +222,7 @@ class SummarizationModule(BaseTransformer):
             decoder_start_token_id=self.decoder_start_token_id,
             num_beams=self.eval_beams,
             max_length=self.eval_max_length,
+            min_length=self.eval_min_length,
         )
         gen_time = (time.time() - t0) / batch["input_ids"].shape[0]
         preds: List[str] = self.ids_to_clean_text(generated_ids)
@@ -342,6 +350,7 @@ class SummarizationModule(BaseTransformer):
             "--val_metric", type=str, default=None, required=False, choices=["bleu", "rouge2", "loss", None]
         )
         parser.add_argument("--eval_max_gen_length", type=int, default=None, help="never generate more than n tokens")
+        parser.add_argument("--eval_min_gen_length", type=int, default=None, help="never generate less than n tokens")
         parser.add_argument("--save_top_k", type=int, default=1, required=False, help="How many checkpoints to save")
         parser.add_argument(
             "--early_stopping_patience",
