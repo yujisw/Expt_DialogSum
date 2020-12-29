@@ -201,6 +201,17 @@ class SummarizationModule(BaseTransformer):
         all_metrics["step_count"] = self.step_count
         self.metrics[prefix].append(all_metrics)  # callback writes this to self.metrics_save_path
         preds = flatten_list([x["preds"] for x in outputs])
+
+        # Save predicted summaries
+        if prefix=='test':
+            preds_save_path = Path(self.output_dir) / "preds_test.json"
+        elif prefix=='val':
+            preds_save_path = Path(self.output_dir) / "preds_val{}.json".format(self.step_count)
+        else:
+            assert False, "Prefix is neither 'val' nor 'test'."
+        with open(preds_save_path, 'w') as f:
+            f.writelines([x["preds"] for x in outputs])
+
         return {
             "log": all_metrics,
             "preds": preds,
