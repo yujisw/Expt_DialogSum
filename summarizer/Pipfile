@@ -13,11 +13,12 @@ rouge-score = "*"
 sacrebleu = "*"
 fsspec = "*"
 filelock = "*"
-transformers = "3.5.1"
+transformers = "==3.5.1"
 fire = "*"
 jupyter = "*"
 jupyterlab = "*"
 matplotlib = "*"
+nltk = "*"
 
 [dev-packages]
 
