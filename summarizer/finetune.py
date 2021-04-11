@@ -210,7 +210,7 @@ class SummarizationModule(BaseTransformer):
         else:
             assert False, "Prefix is neither 'val' nor 'test'."
         with open(preds_save_path, 'w') as f:
-            f.writelines([x["preds"] for x in outputs])
+            f.writelines('\n'.join(preds))
 
         return {
             "log": all_metrics,
