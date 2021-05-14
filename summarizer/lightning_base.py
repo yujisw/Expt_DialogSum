@@ -156,8 +156,8 @@ class BaseTransformer(pl.LightningModule):
                 "lr": self.hparams.learning_rate,
             },
         ]
-        print("optimizer_grouped_parameters")
-        print(optimizer_grouped_parameters)
+        # print("optimizer_grouped_parameters")
+        # print(optimizer_grouped_parameters)
         if self.hparams.adafactor:
             optimizer = Adafactor(
                 optimizer_grouped_parameters, scale_parameter=False, relative_step=False

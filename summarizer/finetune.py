@@ -402,6 +402,20 @@ def main(args, model=None) -> SummarizationModule:
         special_tokens_dict = {'additional_special_tokens': ['[SAYS]','[EOU]','[EOT]']}
         num_added_toks = model.tokenizer.add_special_tokens(special_tokens_dict)
         model.model.resize_token_embeddings(len(model.tokenizer))
+        says_id = model.tokenizer.convert_tokens_to_ids("[SAYS]")
+        eot_id = model.tokenizer.convert_tokens_to_ids("[EOT]")
+    else:
+        special_tokens_dict = {'additional_special_tokens': ['[SEP]']}
+        if args.fixedspecialtoken:
+            special_tokens_dict = {'additional_special_tokens': ['[SEP]', '[SAYS]']}
+        num_added_toks = model.tokenizer.add_special_tokens(special_tokens_dict)
+        model.model.resize_token_embeddings(len(model.tokenizer))
+        says_id = model.tokenizer.convert_tokens_to_ids(":")
+        if args.fixedspecialtoken:
+            says_id = model.tokenizer.convert_tokens_to_ids("[SAYS]")
+        eot_id = model.tokenizer.convert_tokens_to_ids("[SEP]")
+    # print("says_id", says_id)
+    # print("eot_id", eot_id)
 
     if args.use_speaker_embeds or args.use_turn_embeds:
         from speaker_embed_encoder import BartEncoderWithSpeakerEmbedding
@@ -409,15 +423,29 @@ def main(args, model=None) -> SummarizationModule:
         model.model.model.encoder = BartEncoderWithSpeakerEmbedding(
             model.config,
             model.model.model.shared,
+            says_id=says_id,
+            eot_id=eot_id,
             ratio_to_token_embedding=args.ratio_to_token_embedding,
             speaker_embed_scale=args.speaker_embed_scale,
             use_turn_embeds=args.use_turn_embeds,
             partial_embed=args.partial_embed,
+            eod_id=2 if args.bart else 1,
+            pad_id=1 if args.bart else 0,
             ).to('cuda')
         param = model.model.model.encoder.state_dict()
         for name, _ in original_encoder.named_parameters():
             param[name] = original_encoder.state_dict()[name]
         model.model.model.encoder.load_state_dict(param)
+    if args.sinusoidal:
+        from transformers.modeling_bart import SinusoidalPositionalEmbedding
+        model.model.model.encoder.embed_positions = SinusoidalPositionalEmbedding(
+            1024+2, 1024, model.tokenizer.pad_token_id
+        )
+        freeze_params(model.model.model.encoder.embed_positions)
+        model.model.model.decoder.embed_positions = SinusoidalPositionalEmbedding(
+            1024+2, 1024, model.tokenizer.pad_token_id
+        )
+        freeze_params(model.model.model.decoder.embed_positions)
 
     dataset = Path(args.data_dir).name
     if (
@@ -497,6 +525,10 @@ if __name__ == "__main__":
         )
     parser.add_argument("--partial_embed", action="store_true")
     parser.add_argument("--new_params_learning_rate", type=float, default=1e-4, help="Learning rate for new params.")
+
+    parser.add_argument("--fixedspecialtoken", action="store_true", help="Use fixed special tokens (SEP & SAYS).") #本実験では必須
+    parser.add_argument("--bart", action="store_true", help="Use Bart, not Pegasus.")
+    parser.add_argument("--sinusoidal", action="store_true", help="Use Sinusoidal forcibly.") #本実験では必須
 
     args = parser.parse_args()
 

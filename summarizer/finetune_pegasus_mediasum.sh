@@ -16,7 +16,7 @@ python finetune.py \
     --n_train -1 \
     --n_val -1 \
     --n_test -1 \
-    --data_dir "/home/naraki/dialogsum/samsum_dataset_fixed" \
+    --data_dir "/home/naraki/dialogsum/mediasum_dataset" \
     --output_dir "output/${today}" \
     --model_name_or_path "google/pegasus-xsum" \
     --gpus 1 --logger_name wandb \
